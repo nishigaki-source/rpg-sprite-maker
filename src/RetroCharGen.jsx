@@ -16,7 +16,7 @@ const INITIAL_CHAR_STATE = {
   hairColor: '#e74c3c',
   eyeStyle: 0,
   eyeColor: '#2c3e50',
-  hasWhiteEye: false,    
+  faceShape: 0,
   chestStyle: 1, 
   chestColor: '#3498db',
   waistStyle: 1, 
@@ -65,7 +65,7 @@ const RetroCharGen = () => {
            setBitMode(parsed.is16Bit ? '16' : '8');
         }
         const { is16Bit, savedBitMode, savedOutlineMode, ...rest } = parsed;
-        return rest;
+        return { ...INITIAL_CHAR_STATE, ...rest, faceShape: rest.faceShape ?? 0 };
       } catch (e) {
         console.error("Failed to load save data", e);
       }
@@ -119,9 +119,9 @@ const RetroCharGen = () => {
       skinColor: PALETTES.skin[Math.floor(Math.random() * PALETTES.skin.length)],
       hairStyle: Math.floor(Math.random() * 5), // 修正: 0-4 (Skinheadまで)
       hairColor: PALETTES.hair[Math.floor(Math.random() * PALETTES.hair.length)],
-      eyeStyle: Math.floor(Math.random() * 3), // 修正: 0-2
+      eyeStyle: Math.floor(Math.random() * 5), // 0-4 (Normal/Big/Small/Narrow/Cat)
       eyeColor: PALETTES.eyes[Math.floor(Math.random() * PALETTES.eyes.length)],
-      hasWhiteEye: Math.random() > 0.7, 
+      faceShape: Math.floor(Math.random() * 4), // 0-3 (Normal/Round/Square/Long)
       chestStyle: Math.floor(Math.random() * 6), 
       chestColor: PALETTES.outfit[Math.floor(Math.random() * PALETTES.outfit.length)],
       waistStyle: Math.floor(Math.random() * 5), 
@@ -296,11 +296,15 @@ const RetroCharGen = () => {
                     <Selector label={text.eyes} type="index" value={charState.eyeStyle} options={text.eyeStyles} onChange={(v) => setCharState({...charState, eyeStyle: v})} 
                       subSelector={<SubColorSelector value={charState.eyeColor} options={PALETTES.eyes} onChange={(c) => setCharState({...charState, eyeColor: c})} />}
                     />
-                    <label className="flex items-center gap-2 cursor-pointer mt-2 text-xs text-gray-600">
-                        <input type="checkbox" checked={charState.hasWhiteEye} onChange={(e) => setCharState({...charState, hasWhiteEye: e.target.checked})} className="rounded" />
-                        {text.hasSclera}
-                    </label>
                 </div>
+                <Selector
+                  label={text.faceShape}
+                  type="index"
+                  value={charState.faceShape}
+                  options={text.faceShapes}
+                  onChange={(v) => setCharState({ ...charState, faceShape: v })}
+                  category="face"
+                />
             </div>
           </div>
 

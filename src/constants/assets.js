@@ -36,7 +36,6 @@ export const TRANSLATIONS = {
     hairColor: "Hair Color",
     eyes: "Eyes",
     eyeColor: "Eye Color",
-    hasSclera: "Has Sclera",
     outfit: "Outfit",
     chestColor: "Chest Color",
     waistColor: "Waist Color",
@@ -46,6 +45,8 @@ export const TRANSLATIONS = {
     accessories: "Accessories",
     head: "Head",
     eye: "Eye",
+    face: "Face",
+    faceShape: "Face Shape",
     ear: "Ear",
     monsterParts: "Monster Parts",
     horns: "Horns",
@@ -71,19 +72,20 @@ export const TRANSLATIONS = {
     chestOpt: ['Bare', 'Tunic', 'Armor', 'Robe', 'Coat', 'Bikini'],
     waistOpt: ['Pants Only', 'Belt', 'Skirt', 'Loincloth', 'Armor Skirt'],
     hairStyles: ['Short', 'Long', 'Spiky', 'Bob', 'Skinhead'], 
-    
-    // 目のスタイルを9種類に更新
+
+    faceShapes: ['Normal', 'Round', 'Square', 'Long'],
+
+    // Eye styles (5)
     eyeStyles: [
-      'Normal', 'Cool', 'Round', 'Jito', 
-      'Wide', 'Happy', 'Closed', 'Cat/Snake', 'Hollow'
-    ], 
-    
+      'Normal', 'Big', 'Small', 'Narrow', 'Cat'
+    ],
     shoeStyles: ['Barefoot', 'Shoes', 'Boots'],
     accHead: ['None', 'Cat Ears', 'Crown'],
     accEye: ['None', 'Glasses', 'Sunglasses', 'Monocle', 'Scouter', 'Eyepatch'],
     accEar: ['None', 'Gold Ring', 'Silver Stud', 'Red Gem', 'Blue Gem'],
     optHorns: ['None', 'Small', 'Bull', 'Unicorn', 'Demon', 'Ram', 'Antlers'],
-    optWings: ['None', 'Bat', 'Angel', 'Fairy', 'Dragon', 'Butterfly', 'Mechanical'],
+    // Mechanical -> Demon に変更
+    optWings: ['None', 'Bat', 'Angel', 'Fairy', 'Dragon', 'Butterfly', 'Demon'],
     optTail: ['None', 'Demon', 'Beast', 'Lizard', 'Fox', 'Cat'],
     optWeapon: ['None', 'Sword', 'Staff', 'Bow', 'Spear', 'Axe', 'Dagger'],
     optShield: ['None', 'Buckler', 'Kite Shield', 'Tower Shield'],
@@ -106,7 +108,6 @@ export const TRANSLATIONS = {
     hairColor: "髪色",
     eyes: "目の形",
     eyeColor: "目の色",
-    hasSclera: "白目あり",
     outfit: "服装",
     chestColor: "胸の色",
     waistColor: "腰の色",
@@ -116,6 +117,8 @@ export const TRANSLATIONS = {
     accessories: "アクセサリー",
     head: "頭",
     eye: "目",
+    face: "顔",
+    faceShape: "顔の形",
     ear: "耳",
     monsterParts: "モンスターパーツ",
     horns: "ツノ",
@@ -141,19 +144,20 @@ export const TRANSLATIONS = {
     chestOpt: ['裸', 'チュニック', '鎧', 'ローブ', 'コート', 'ビキニ'],
     waistOpt: ['ズボンのみ', 'ベルト', 'スカート', '腰布', '垂れ'],
     hairStyles: ['ショート', 'ロング', 'ツンツン', 'ボブ', 'スキンヘッド'],
-    
-    // 目のスタイルを9種類に更新
+
+    faceShapes: ['普通', '丸顔', '四角', '面長'],
+
+    // 目のスタイル（5種類）
     eyeStyles: [
-      '普通', 'クール', 'つぶら', 'ジト目', 
-      '見開き', '笑顔', '閉じ目', '猫目', '虚ろ'
+      '普通', '大きい', '小さい', '細目', '猫目'
     ],
-    
     shoeStyles: ['裸足', '靴', 'ブーツ'],
     accHead: ['なし', '猫耳', '王冠'],
     accEye: ['なし', 'メガネ', 'サングラス', 'モノクル', 'スカウター', '眼帯'],
     accEar: ['なし', '金の輪', '銀の鋲', '赤宝石', '青宝石'],
     optHorns: ['なし', '小', '牛', 'ユニコーン', '悪魔', '羊', '鹿'],
-    optWings: ['なし', 'コウモリ', '天使', '妖精', 'ドラゴン', '蝶', '機械'],
+    // 機械 -> 悪魔 に変更
+    optWings: ['なし', 'コウモリ', '天使', '妖精', 'ドラゴン', '蝶', '悪魔'],
     optTail: ['なし', '悪魔', '獣', 'トカゲ', '狐', '猫'],
     optWeapon: ['なし', '剣', '杖', '弓', '槍', '斧', '短剣'],
     optShield: ['なし', '小盾', 'カイト', '大盾'],
