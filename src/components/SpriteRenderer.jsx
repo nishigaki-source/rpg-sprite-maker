@@ -12,7 +12,6 @@ const SpriteRenderer = forwardRef(({
 }, ref) => {
   const localCanvasRef = useRef(null);
   
-  // 親コンポーネントからキャンバスへのアクセスを提供
   useImperativeHandle(ref, () => localCanvasRef.current);
 
   const CANVAS_SIZE = 48;
@@ -24,7 +23,6 @@ const SpriteRenderer = forwardRef(({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
-    // キャンバス初期化
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.globalAlpha = 1.0;
@@ -41,13 +39,13 @@ const SpriteRenderer = forwardRef(({
       return c;
     };
 
-    const buffers = [createBuffer(), createBuffer(), createBuffer()]; // 0:Back, 1:Body, 2:Head
+    // 0:Shadow, 1:Back, 2:Body, 3:Head
+    const buffers = [createBuffer(), createBuffer(), createBuffer(), createBuffer()]; 
     const ctxs = buffers.map(b => b.getContext('2d'));
     
-    let currentLayer = 1; 
+    let currentLayer = 2; 
     const setLayer = (idx) => { currentLayer = idx; };
     
-    // シンプルなドット描画
     const drawPixel = (x, y, color) => {
       const c = ctxs[currentLayer];
       c.fillStyle = color;
@@ -60,19 +58,28 @@ const SpriteRenderer = forwardRef(({
       c.fillRect(x + OFFSET_X, y + OFFSET_Y, w, h);
     };
 
-    // シェーディング描画ヘルパー (8/16/32-bit対応)
+    // 中級テクニック: ディザリング（網掛け）描画ヘルパー
+    const drawDitherPattern = (ctx, x, y, w, h, color) => {
+        ctx.fillStyle = color;
+        for (let dy = 0; dy < h; dy++) {
+            for (let dx = 0; dx < w; dx++) {
+                if (((x + dx) + (y + dy)) % 2 === 0) {
+                    ctx.fillRect(x + dx + OFFSET_X, y + dy + OFFSET_Y, 1, 1);
+                }
+            }
+        }
+    };
+
     const drawShadedRect = (x, y, w, h, baseColor, isMetal = false) => {
       const c = ctxs[currentLayer];
       
       if (bitMode === '8') {
-        // 8-BIT: 単色
         c.fillStyle = baseColor;
         c.fillRect(x + OFFSET_X, y + OFFSET_Y, w, h);
         return;
       }
       
       if (bitMode === '32') {
-        // 32-BIT: グラデーション
         const gradient = c.createLinearGradient(
           x + OFFSET_X, 
           y + OFFSET_Y, 
@@ -81,13 +88,11 @@ const SpriteRenderer = forwardRef(({
         );
         
         if (isMetal) {
-          // 金属光沢
-          gradient.addColorStop(0, adjustColor(baseColor, 60));
-          gradient.addColorStop(0.3, baseColor);
-          gradient.addColorStop(0.5, adjustColor(baseColor, 40)); 
-          gradient.addColorStop(1, adjustColor(baseColor, -60));
+          gradient.addColorStop(0, adjustColor(baseColor, 90)); 
+          gradient.addColorStop(0.4, baseColor);
+          gradient.addColorStop(0.6, adjustColor(baseColor, -40)); 
+          gradient.addColorStop(1, adjustColor(baseColor, -80));
         } else {
-          // 滑らかなシェーディング
           gradient.addColorStop(0, adjustColor(baseColor, 20));
           gradient.addColorStop(1, adjustColor(baseColor, -30));
         }
@@ -97,17 +102,51 @@ const SpriteRenderer = forwardRef(({
         return;
       }
 
-      // 16-BIT: ドットシェーディング
-      const light = adjustColor(baseColor, 40);
-      const dark = adjustColor(baseColor, -40);
+      // 16-BIT
+      const lightAmount = isMetal ? 80 : 40; 
+      const darkAmount = isMetal ? -60 : -40; 
+
+      const light = adjustColor(baseColor, lightAmount);
+      const dark = adjustColor(baseColor, darkAmount);
       
       drawRect(x, y, w, h, baseColor); 
-      drawRect(x, y, w, 1, light); // Top
-      drawRect(x, y, 1, h, light); // Left
-      drawRect(x + w - 1, y, 1, h, dark); // Right
-      drawRect(x, y + h - 1, w, 1, dark); // Bottom
-      drawPixel(x + w - 1, y, baseColor); 
-      drawPixel(x, y + h - 1, baseColor);
+      drawRect(x, y, w, 1, light); 
+      drawRect(x, y, 1, h, light); 
+
+      if (w > 2 && h > 2) {
+          drawDitherPattern(c, x + w - 1, y, 1, h, dark);
+          drawDitherPattern(c, x, y + h - 1, w, 1, dark);
+      } else {
+          drawRect(x + w - 1, y, 1, h, dark);
+          drawRect(x, y + h - 1, w, 1, dark); 
+      }
+      
+      if (isMetal && w > 2 && h > 2) {
+          drawPixel(x + 1, y + 1, '#ffffff'); 
+      } else {
+          drawPixel(x + w - 1, y, baseColor); 
+          drawPixel(x, y + h - 1, baseColor);
+      }
+    };
+
+    // 中級テクニック: アンチエイリアス（AA）付きブロック描画
+    const drawAntiAliasedBlock = (x, y, w, h, color) => {
+        drawRect(x + 1, y, w - 2, h, color); 
+        drawRect(x, y + 1, 1, h - 2, color); 
+        drawRect(x + w - 1, y + 1, 1, h - 2, color); 
+
+        if (bitMode !== '8') {
+            const ctx = ctxs[currentLayer];
+            ctx.globalAlpha = 0.4; 
+            ctx.fillStyle = color;
+            
+            ctx.fillRect(x + OFFSET_X, y + OFFSET_Y, 1, 1); 
+            ctx.fillRect((x + w - 1) + OFFSET_X, y + OFFSET_Y, 1, 1); 
+            ctx.fillRect(x + OFFSET_X, (y + h - 1) + OFFSET_Y, 1, 1); 
+            ctx.fillRect((x + w - 1) + OFFSET_X, (y + h - 1) + OFFSET_Y, 1, 1); 
+            
+            ctx.globalAlpha = 1.0; 
+        }
     };
 
     const { 
@@ -122,10 +161,9 @@ const SpriteRenderer = forwardRef(({
 
     const actualSkinColor = skinColor === '#fsc' ? '#ffdbac' : skinColor;
     
-    // 派生カラー
-    const cSkinLight = adjustColor(actualSkinColor, 30);
+    const cSkinLight = adjustColor(actualSkinColor, 40); 
     const cSkinShadow = adjustColor(actualSkinColor, -30);
-    const cHairLight = adjustColor(hairColor, 40);
+    const cHairLight = adjustColor(hairColor, 50);
     const cHairShadow = adjustColor(hairColor, -40);
     const cGold = '#f1c40f';
     const cSilver = '#95a5a6';
@@ -140,28 +178,43 @@ const SpriteRenderer = forwardRef(({
 
     const drawMode = direction === 2 ? 1 : direction; 
 
-    // アニメーション変数
     let yOffset = animationFrame === 1 ? 1 : 0;
     let walkOffset = animationFrame === 1 ? 1 : -1; 
     let tailOffset = animationFrame === 1 ? 1 : 0; 
     let itemBob = animationFrame === 1 ? 1 : 0; 
 
-    // スライム用の変数
     let slimeHeadY = 4 + yOffset; 
-    if (baseType === 1) { // Slime
+    if (baseType === 1) { 
        yOffset = 0; 
        slimeHeadY = 18 + (animationFrame === 0 ? 0 : 1);
-    } else if (baseType === 3) { // Ghost
+    } else if (baseType === 3) { 
        yOffset = animationFrame === 1 ? 1 : -1;
        walkOffset = 0;
     }
 
-    // 羽のアニメーション同期
     let wingOffset = yOffset; 
 
     const activeHeadY = (baseType === 1) ? slimeHeadY : (4 + yOffset);
     const headY = 4 + yOffset;
     const baseHandY = 19; 
+
+    // ゴーストのみ接地影を描画
+    const drawGroundShadow = () => {
+        if (baseType !== 3) return;
+
+        setLayer(0); 
+        const ctx = ctxs[0];
+        const shadowColor = 'rgba(0, 0, 0, 0.2)';
+        
+        const shadowY = 34; 
+        const shadowW = 10; 
+        const shadowX = 11;
+
+        ctx.globalAlpha = 0.5;
+        drawRect(shadowX + 1, shadowY, shadowW - 2, 1, shadowColor);
+        drawRect(shadowX + 2, shadowY + 1, shadowW - 4, 1, shadowColor);
+        ctx.globalAlpha = 1.0;
+    };
 
     const drawShoeOnLeg = (legX, legY, legW, legH) => {
         if (shoeStyle === 0) return; 
@@ -171,7 +224,11 @@ const SpriteRenderer = forwardRef(({
         const shoeY = legY + legH - shoeH;
         if (bitMode !== '8' && shoeH > 1) {
              drawRect(legX, shoeY, legW, shoeH, shoeColor);
-             drawRect(legX, shoeY + shoeH -1, legW, 1, adjustColor(shoeColor, -40)); 
+             if (bitMode === '16') {
+                 drawDitherPattern(ctxs[currentLayer], legX, shoeY + shoeH -1, legW, 1, adjustColor(shoeColor, -40));
+             } else {
+                 drawRect(legX, shoeY + shoeH -1, legW, 1, adjustColor(shoeColor, -40)); 
+             }
         } else {
              drawRect(legX, shoeY, legW, shoeH, shoeColor);
         }
@@ -179,8 +236,6 @@ const SpriteRenderer = forwardRef(({
 
     const getHandColor = () => hasClaws ? hornColor : actualSkinColor; 
     const getHandLen = () => hasClaws ? 3 : 2;
-
-    // --- EQUIPMENT DRAWING HELPERS ---
 
     const drawWeapon = (x, y, isSideView) => {
         if (weapon === 0) return;
@@ -218,18 +273,22 @@ const SpriteRenderer = forwardRef(({
         }
     };
 
-    // --- PARTS DRAWING ---
-
     const drawWings = (isBackLayer) => {
       if (wings === 0) return;
       const wc = wingColor;
       const wcDark = adjustColor(wc, -30);
-      setLayer(isBackLayer ? 0 : 2); 
+      setLayer(isBackLayer ? 1 : 3); 
       const sY = baseType === 1 ? 16 : 0;
 
       const fillWing = (x, y, w, h, c) => {
         drawRect(x, y, w, h, c);
-        if (bitMode !== '8' && w > 2 && h > 2) { drawRect(x+1, y+h-1, w-1, 1, wcDark); }
+        if (bitMode !== '8' && w > 2 && h > 2) { 
+            if(bitMode === '16') {
+                drawDitherPattern(ctxs[currentLayer], x+1, y+h-1, w-1, 1, wcDark);
+            } else {
+                drawRect(x+1, y+h-1, w-1, 1, wcDark); 
+            }
+        }
       };
 
       if (drawMode === 0) { // Front
@@ -243,54 +302,40 @@ const SpriteRenderer = forwardRef(({
         else if (wings === 6) { const metalC = '#95a5a6'; drawRect(4, wy, 8, 2, metalC); drawRect(20, wy, 8, 2, metalC); drawRect(2, wy - 6, 2, 12, wc); drawRect(28, wy - 6, 2, 12, wc); drawRect(0, wy - 2, 2, 4, adjustColor(wc, 40)); drawRect(30, wy - 2, 2, 4, adjustColor(wc, 40)); }
       } 
       else if (drawMode === 1) { // Side
-        if (isBackLayer) return; // 手前のみ描画（背中から生える1枚）
+        if (isBackLayer) return; 
         
         const wy = wingOffset + sY;
-        const useLeftWing = (direction === 1); 
-        // 方向によってベース位置を切り替え
-        const offX = useLeftWing ? 24 : -16;
-        
-        // 背中から離すための微調整(-3)と、高さの微調整(+2)
-        const finalOffX = offX - 3;
+        const finalOffX = -4; 
         const finalOffY = 2;
 
         if (wings === 1) { // Bat
-          if (useLeftWing) {
-             fillWing(4 + finalOffX, 14 + wy + finalOffY, 6, 1, wc); fillWing(3 + finalOffX, 15 + wy + finalOffY, 2, 4, wc); fillWing(5 + finalOffX, 15 + wy + finalOffY, 1, 1, wc); fillWing(6 + finalOffX, 16 + wy + finalOffY, 1, 1, wc);
-          } else {
-             fillWing(22 + finalOffX, 14 + wy + finalOffY, 6, 1, wc); fillWing(27 + finalOffX, 15 + wy + finalOffY, 2, 4, wc); fillWing(26 + finalOffX, 15 + wy + finalOffY, 1, 1, wc); fillWing(25 + finalOffX, 16 + wy + finalOffY, 1, 1, wc);
-          }
+             drawRect(22 + finalOffX, 14 + wy + finalOffY, 4, 1, wc); 
+             drawRect(25 + finalOffX, 15 + wy + finalOffY, 3, 1, wc); 
+             drawRect(27 + finalOffX, 16 + wy + finalOffY, 2, 2, wc); 
+             drawPixel(24 + finalOffX, 15 + wy + finalOffY, wc); 
+             drawPixel(26 + finalOffX, 17 + wy + finalOffY, wc);
         } else if (wings === 2) { // Angel
-          if (useLeftWing) {
-             fillWing(5 + finalOffX, 12 + wy + finalOffY, 5, 8, '#ecf0f1'); drawPixel(4 + finalOffX, 13 + wy + finalOffY, '#bdc3c7');
-          } else {
-             fillWing(22 + finalOffX, 12 + wy + finalOffY, 5, 8, '#ecf0f1'); drawPixel(27 + finalOffX, 13 + wy + finalOffY, '#bdc3c7');
-          }
+             drawRect(22 + finalOffX, 13 + wy + finalOffY, 4, 4, '#ecf0f1'); 
+             drawRect(24 + finalOffX, 12 + wy + finalOffY, 3, 1, '#ecf0f1'); 
+             drawRect(23 + finalOffX, 17 + wy + finalOffY, 2, 2, '#ecf0f1'); 
+             drawPixel(26 + finalOffX, 14 + wy + finalOffY, '#bdc3c7'); 
         } else if (wings === 3) { // Fairy
-          if (useLeftWing) {
-             fillWing(6 + finalOffX, 13 + wy + finalOffY, 4, 6, 'rgba(162, 155, 254, 0.6)');
-          } else {
-             fillWing(22 + finalOffX, 13 + wy + finalOffY, 4, 6, 'rgba(162, 155, 254, 0.6)');
-          }
+             drawRect(22 + finalOffX, 13 + wy + finalOffY, 3, 4, 'rgba(162, 155, 254, 0.6)');
+             drawRect(25 + finalOffX, 12 + wy + finalOffY, 2, 2, 'rgba(162, 155, 254, 0.6)');
         } else if (wings === 4) { // Dragon
-          if (useLeftWing) {
-             fillWing(2 + finalOffX, 10 + wy + finalOffY, 8, 2, wc); fillWing(1 + finalOffX, 12 + wy + finalOffY, 2, 6, wc); fillWing(3 + finalOffX, 12 + wy + finalOffY, 6, 4, wc);
-          } else {
-             fillWing(22 + finalOffX, 10 + wy + finalOffY, 8, 2, wc); fillWing(29 + finalOffX, 12 + wy + finalOffY, 2, 6, wc); fillWing(23 + finalOffX, 12 + wy + finalOffY, 6, 4, wc);
-          }
+             drawRect(22 + finalOffX, 11 + wy + finalOffY, 6, 1, wc); 
+             drawRect(23 + finalOffX, 12 + wy + finalOffY, 4, 4, wc); 
+             drawRect(27 + finalOffX, 12 + wy + finalOffY, 1, 3, wc); 
+             drawPixel(28 + finalOffX, 11 + wy + finalOffY, wc); 
         } else if (wings === 5) { // Butterfly
-           if (useLeftWing) {
-              fillWing(2 + finalOffX, 10 + wy + finalOffY, 8, 6, wc); fillWing(4 + finalOffX, 16 + wy + finalOffY, 6, 6, adjustColor(wc, -20)); drawPixel(5 + finalOffX, 13 + wy + finalOffY, '#fff');
-           } else {
-              fillWing(22 + finalOffX, 10 + wy + finalOffY, 8, 6, wc); fillWing(22 + finalOffX, 16 + wy + finalOffY, 6, 6, adjustColor(wc, -20)); drawPixel(26 + finalOffX, 13 + wy + finalOffY, '#fff');
-           }
+              drawRect(22 + finalOffX, 11 + wy + finalOffY, 4, 4, wc); 
+              drawRect(23 + finalOffX, 15 + wy + finalOffY, 3, 3, adjustColor(wc, -20)); 
+              drawPixel(26 + finalOffX, 12 + wy + finalOffY, '#fff');
         } else if (wings === 6) { // Mechanical
            const metalC = '#95a5a6';
-           if (useLeftWing) {
-              drawRect(4 + finalOffX, 14 + wy + finalOffY, 8, 2, metalC); drawRect(2 + finalOffX, 8 + wy + finalOffY, 2, 12, wc); drawRect(0 + finalOffX, 12 + wy + finalOffY, 2, 4, adjustColor(wc, 40));
-           } else {
-              drawRect(20 + finalOffX, 14 + wy + finalOffY, 8, 2, metalC); drawRect(28 + finalOffX, 8 + wy + finalOffY, 2, 12, wc); drawRect(30 + finalOffX, 12 + wy + finalOffY, 2, 4, adjustColor(wc, 40));
-           }
+           drawRect(20 + finalOffX, 14 + wy + finalOffY, 6, 2, metalC); 
+           drawRect(26 + finalOffX, 10 + wy + finalOffY, 2, 8, wc); 
+           drawRect(28 + finalOffX, 13 + wy + finalOffY, 2, 2, adjustColor(wc, 40));
         }
       }
       else if (drawMode === 3) { // Back
@@ -311,7 +356,7 @@ const SpriteRenderer = forwardRef(({
       if (useTail === 0) return;
 
       const tc = (baseType === 5) ? actualSkinColor : tailColor;
-      setLayer(isBackLayer ? 0 : 2); 
+      setLayer(isBackLayer ? 1 : 3); 
       const sY = baseType === 1 ? 16 : 0;
 
       if (drawMode === 0) { 
@@ -324,11 +369,15 @@ const SpriteRenderer = forwardRef(({
       }
       else if (drawMode === 1) { 
         if (!isBackLayer) return;
-        if (useTail === 1) { drawRect(18, 22 + tailOffset + sY, 4, 1, tc); drawRect(21, 18 + tailOffset + sY, 2, 4, tc); } 
-        else if (useTail === 2) { drawRect(17, 23 + tailOffset + sY, 5, 3, tc); } 
-        else if (useTail === 3) { drawRect(16, 21 + sY, 3, 3, tc); drawRect(17, 23 + sY, 3, 3, tc); drawRect(19, 25 + sY, 6, 3, tc); }
-        else if (useTail === 4) { drawRect(17, 20 + sY + tailOffset, 6, 4, tc); drawRect(20, 18 + sY + tailOffset, 4, 2, '#fff'); }
-        else if (useTail === 5) { drawRect(18, 22 + sY + tailOffset, 2, 2, tc); drawRect(19, 20 + sY + tailOffset, 2, 4, tc); }
+        if (useTail === 1) { 
+            drawRect(18, 22 + tailOffset + sY, 3, 1, tc); 
+            drawRect(20, 19 + tailOffset + sY, 2, 3, tc); 
+            drawPixel(21, 18 + tailOffset + sY, tc); 
+        } 
+        else if (useTail === 2) { drawRect(17, 23 + tailOffset + sY, 5, 2, tc); drawRect(18, 22 + tailOffset + sY, 3, 1, tc); } 
+        else if (useTail === 3) { drawRect(16, 22 + sY, 2, 2, tc); drawRect(18, 23 + sY, 2, 2, tc); drawRect(20, 24 + sY, 4, 2, tc); }
+        else if (useTail === 4) { drawRect(17, 20 + sY + tailOffset, 5, 3, tc); drawRect(20, 18 + sY + tailOffset, 3, 2, '#fff'); }
+        else if (useTail === 5) { drawRect(18, 22 + sY + tailOffset, 2, 2, tc); drawRect(19, 20 + sY + tailOffset, 2, 3, tc); }
       }
       else if (drawMode === 3) { 
         if (isBackLayer) return;
@@ -345,12 +394,10 @@ const SpriteRenderer = forwardRef(({
       const useHorns = (baseType === 7 && horns === 0) ? 4 : horns; 
       if (useHorns === 0) return;
 
-      setLayer(2); 
+      setLayer(3); 
       const hc = hornColor;
-      
       const hY = activeHeadY; 
       const dh = (x,y,w,h,c) => drawRect(x,y,w,h,c);
-
       const sX = (baseType === 1 && drawMode === 1) ? 4 : 0; 
       const sY = (baseType === 1) ? -4 : 0; 
 
@@ -373,14 +420,13 @@ const SpriteRenderer = forwardRef(({
 
     const drawEyeAccessory = (hY) => {
         if (eyeAccessory === 0 || drawMode === 3) return; 
-        setLayer(2);
+        setLayer(3);
         
         let eyeY = hY + 5;
         if(baseType === 1) eyeY = hY + 4; 
 
         const color = '#333'; 
         const glassColor = 'rgba(100, 200, 255, 0.5)';
-        
         const sOff = baseType === 1 ? 4 : 0;
         const sY = baseType === 1 && drawMode === 1 ? 4 : 0; 
 
@@ -423,7 +469,7 @@ const SpriteRenderer = forwardRef(({
 
     const drawEarAccessory = (hY) => {
         if (earAccessory === 0 || drawMode === 3 || baseType === 1 || baseType === 2) return;
-        setLayer(2);
+        setLayer(3);
         
         let c = cGold;
         if (earAccessory === 2) c = cSilver;
@@ -442,7 +488,7 @@ const SpriteRenderer = forwardRef(({
     
     const drawHeadAccessory = (hY) => {
         if (accessory === 0) return;
-        setLayer(2);
+        setLayer(3);
         
         const sY = baseType === 1 ? -4 : 0; 
         const sX = (baseType === 1 && drawMode === 1) ? 4 : 0; 
@@ -461,9 +507,8 @@ const SpriteRenderer = forwardRef(({
         }
     };
 
-    // ★ 復活させた drawHands 関数
     const drawHands = (isFrontLayer) => {
-        setLayer(isFrontLayer ? 2 : 0);
+        setLayer(isFrontLayer ? 3 : 1);
         const hColor = getHandColor();
         const hLen = getHandLen();
         if (baseType === 1) return; 
@@ -481,26 +526,91 @@ const SpriteRenderer = forwardRef(({
         }
     };
 
+    const drawEyeUnit = (ox, oy, style, color, isSide) => {
+        // 白目の描画
+        if (hasWhiteEye && style !== 6 && style !== 5) {
+            const w = '#ffffff';
+            if (style === 3) { // Jito
+                drawRect(ox - 1, oy + 1, 1, 1, w);
+            } else if (style === 4) { // Wide
+                drawRect(ox - 1, oy - 1, 4, 4, w);
+            } else {
+                drawRect(ox - 1, oy, 1, 2, w);
+            }
+        }
+
+        if (style === 0) { // Normal
+            drawRect(ox, oy, 2, 2, color);
+            if (bitMode !== '8') drawPixel(ox, oy, '#fff'); 
+        } 
+        else if (style === 1) { // Cool
+            drawRect(ox, oy, 2, 1, color);
+            drawPixel(ox + 1, oy + 1, color);
+        }
+        else if (style === 2) { // Round
+            drawRect(ox, oy - 1, 2, 3, color);
+            if (bitMode !== '8') drawPixel(ox, oy - 1, '#fff');
+        }
+        else if (style === 3) { // Jito
+            drawRect(ox, oy + 1, 2, 1, color);
+            drawRect(ox - 1, oy, 4, 1, adjustColor(actualSkinColor, -20)); 
+        }
+        else if (style === 4) { // Wide
+            drawPixel(ox, oy + 1, color);
+        }
+        else if (style === 5) { // Happy
+            drawPixel(ox, oy + 1, '#333');
+            drawPixel(ox + 1, oy, '#333');
+            drawPixel(ox + 2, oy + 1, '#333');
+        }
+        else if (style === 6) { // Closed
+            drawRect(ox, oy + 1, 3, 1, '#333');
+        }
+        else if (style === 7) { // Cat/Snake
+            drawRect(ox + 1, oy - 1, 1, 3, color);
+        }
+        else if (style === 8) { // Hollow
+            drawRect(ox, oy, 2, 2, adjustColor(color, -60));
+            drawPixel(ox, oy, '#000');
+        }
+    };
+
 
     // --- MAIN RENDER SEQUENCE ---
+
+    drawGroundShadow(); 
 
     drawWings(true);
     drawTail(true);
     
-    setLayer(0); 
+    setLayer(1); 
     if (baseType !== 1 && baseType !== 2) { // Hair back
         if (hairStyle !== 4) { // Not Skinhead
             if (drawMode === 1) { 
-                 if (hairStyle === 0) { drawRect(17, headY, 4, 7, hairColor); if(bitMode !== '8') drawRect(17, headY+6, 4, 1, cHairShadow); }
-                 else if (hairStyle === 1) { 
-                     drawRect(15, headY, 8, 12, hairColor); 
+                 if (hairStyle === 0) { // Short
+                     drawRect(17, headY + 1, 4, 5, hairColor); 
+                     drawRect(18, headY, 2, 1, hairColor); 
+                     drawRect(18, headY+6, 2, 1, hairColor); 
+                     if(bitMode !== '8') drawRect(17, headY+6, 4, 1, cHairShadow); 
+                 }
+                 else if (hairStyle === 1) { // Long
+                     drawRect(16, headY, 6, 12, hairColor); 
+                     drawRect(15, headY + 1, 1, 10, hairColor); 
+                     drawRect(22, headY + 1, 1, 10, hairColor); 
                      if(bitMode !== '8') { 
-                        drawRect(15, headY+11, 8, 1, cHairShadow); 
-                        drawRect(15, headY+3, 8, 1, cHairLight); 
+                        drawRect(16, headY+11, 6, 1, cHairShadow); 
+                        drawRect(16, headY+3, 6, 1, cHairLight); 
                      } 
                  }
-                 else if (hairStyle === 2) { drawRect(18, headY, 3, 5, hairColor); }
-                 else if (hairStyle === 3) { drawRect(15, headY + 1, 6, 8, hairColor); if(bitMode !== '8') { drawRect(15, headY+8, 6, 1, cHairShadow); } }
+                 else if (hairStyle === 2) { // Spiky
+                     drawRect(18, headY + 1, 3, 4, hairColor); 
+                     drawPixel(19, headY, hairColor); 
+                 }
+                 else if (hairStyle === 3) { // Bob
+                     drawRect(16, headY + 1, 5, 8, hairColor); 
+                     drawRect(15, headY + 2, 1, 6, hairColor);
+                     if(bitMode !== '8') { drawRect(16, headY+8, 5, 1, cHairShadow); } 
+                 }
             } else if (drawMode === 0) { 
                  if (hairStyle === 0) { drawRect(9, headY, 2, 6, hairColor); drawRect(21, headY, 2, 6, hairColor); }
                  else if (hairStyle === 1) { drawRect(9, headY, 2, 12, hairColor); drawRect(21, headY, 2, 12, hairColor); }
@@ -508,9 +618,9 @@ const SpriteRenderer = forwardRef(({
                  else if (hairStyle === 3) { drawRect(8, headY + 1, 3, 8, hairColor); drawRect(21, headY + 1, 3, 8, hairColor); }
             }
         }
-    } else if (baseType === 1 && hairStyle !== 4) { // Slime Back Hair
+    } else if (baseType === 1 && hairStyle !== 4) { 
         const hY = activeHeadY - 2;
-        const sX = 4; // Side view shift
+        const sX = 4; 
         if (drawMode === 3) {
              if (hairStyle === 0) { drawRect(13, hY, 6, 3, hairColor); }
              else if (hairStyle === 1) { drawRect(13, hY, 6, 8, hairColor); }
@@ -522,8 +632,7 @@ const SpriteRenderer = forwardRef(({
         }
     }
 
-    // 2. EQUIPMENT (BACK LAYER)
-    setLayer(0);
+    setLayer(1);
     const isRightFacing = direction === 2; 
     
     if (baseType !== 1) {
@@ -540,8 +649,7 @@ const SpriteRenderer = forwardRef(({
         }
     }
 
-    // 3. BODY PARTS (Layer 1)
-    setLayer(1);
+    setLayer(2);
 
     if (baseType === 1) { 
         // Slime Body
@@ -549,7 +657,16 @@ const SpriteRenderer = forwardRef(({
         const sH = animationFrame === 0 ? 14 : 12;
         const sX = (32 - sW) / 2;
         const sY = 32 - sH;
-        drawShadedRect(sX, sY, sW, sH, actualSkinColor);
+        if (bitMode === '8') {
+             drawRect(sX + 1, sY, sW - 2, sH, actualSkinColor);
+             drawRect(sX, sY + 1, 1, sH - 1, actualSkinColor);
+             drawRect(sX + sW - 1, sY + 1, 1, sH - 1, actualSkinColor);
+        } else {
+             drawAntiAliasedBlock(sX, sY, sW, sH, actualSkinColor);
+             if (bitMode === '16') {
+                 drawDitherPattern(ctxs[currentLayer], sX+1, sY+sH-2, sW-2, 2, cSkinShadow);
+             }
+        }
         if(bitMode !== '8') drawPixel(sX + 3, sY + 3, cSkinLight);
     } 
     else {
@@ -565,8 +682,9 @@ const SpriteRenderer = forwardRef(({
                 } else {
                     drawRect(11, chestY, 10, 5, bodyColor);
                 }
-                if (chestStyle === 1) { drawShadedRect(11, chestY, 10, 5, chestColor); drawRect(9, chestY, 2, 4, chestColor); drawRect(21, chestY, 2, 4, chestColor); } 
-                else if (chestStyle === 2) { drawShadedRect(10, chestY, 12, 5, chestColor); drawShadedRect(8, chestY - 1, 4, 4, adjustColor(chestColor, 20)); drawShadedRect(20, chestY - 1, 4, 4, adjustColor(chestColor, 20)); } 
+                const isArmor = chestStyle === 2; // 鎧かどうか
+                if (chestStyle === 1) { drawShadedRect(11, chestY, 10, 5, chestColor, false); drawRect(9, chestY, 2, 4, chestColor); drawRect(21, chestY, 2, 4, chestColor); } 
+                else if (chestStyle === 2) { drawShadedRect(10, chestY, 12, 5, chestColor, true); drawShadedRect(8, chestY - 1, 4, 4, adjustColor(chestColor, 20), true); drawShadedRect(20, chestY - 1, 4, 4, adjustColor(chestColor, 20), true); } 
                 else if (chestStyle === 3) { drawRect(10, chestY, 12, 5, chestColor); drawRect(9, chestY, 2, 5, chestColor); drawRect(21, chestY, 2, 5, chestColor); } 
                 else if (chestStyle === 4) { drawRect(11, chestY, 10, 5, chestColor); drawRect(11, chestY, 2, 5, adjustColor(chestColor, 20)); drawRect(19, chestY, 2, 5, adjustColor(chestColor, 20)); drawRect(9, chestY, 2, 4, chestColor); drawRect(21, chestY, 2, 4, chestColor); } 
                 else if (chestStyle === 5) { drawRect(12, chestY+1, 3, 2, chestColor); drawRect(17, chestY+1, 3, 2, chestColor); drawRect(9, chestY, 2, 2, actualSkinColor); drawRect(21, chestY, 2, 2, actualSkinColor); } 
@@ -574,8 +692,8 @@ const SpriteRenderer = forwardRef(({
 
             } else if (mode === 1) { 
                 if(baseType === 2) drawRect(14, chestY+1, 4, 4, bodyColor); else drawRect(13, chestY, 6, 5, bodyColor);
-                if (chestStyle === 1) { drawShadedRect(13, chestY, 6, 5, chestColor); drawRect(14 + walkOffset, chestY + 1, 3, 3, chestColor); } 
-                else if (chestStyle === 2) { drawShadedRect(12, chestY, 8, 5, chestColor); drawShadedRect(12 + walkOffset, chestY - 1, 4, 4, adjustColor(chestColor, 20)); } 
+                if (chestStyle === 1) { drawShadedRect(13, chestY, 6, 5, chestColor, false); drawRect(14 + walkOffset, chestY + 1, 3, 3, chestColor); } 
+                else if (chestStyle === 2) { drawShadedRect(12, chestY, 8, 5, chestColor, true); drawShadedRect(12 + walkOffset, chestY - 1, 4, 4, adjustColor(chestColor, 20), true); } 
                 else if (chestStyle === 3) { drawRect(12, chestY, 8, 5, chestColor); drawRect(14 + walkOffset, chestY + 1, 4, 4, chestColor); } 
                 else if (chestStyle === 4) { drawRect(13, chestY, 6, 5, chestColor); drawRect(14 + walkOffset, chestY + 1, 3, 3, chestColor); } 
                 else if (chestStyle === 5) { drawRect(13, chestY+1, 4, 2, chestColor); drawRect(14 + walkOffset, chestY + 1, 2, 2, actualSkinColor); } 
@@ -592,13 +710,13 @@ const SpriteRenderer = forwardRef(({
                  if (waistStyle === 1) { drawRect(11, waistY, 10, 2, wColor); drawRect(14, waistY, 4, 2, cGold); } 
                  else if (waistStyle === 2) { drawShadedRect(10, waistY, 12, 5, wColor); } 
                  else if (waistStyle === 3) { drawRect(13, waistY, 6, 5, wColor); } 
-                 else if (waistStyle === 4) { drawShadedRect(10, waistY, 12, 5, wColor); drawRect(15, waistY, 2, 5, adjustColor(wColor, -20)); }
+                 else if (waistStyle === 4) { drawShadedRect(10, waistY, 12, 5, wColor, true); drawRect(15, waistY, 2, 5, adjustColor(wColor, -20)); }
             } else if (mode === 1) { 
                  drawRect(13, waistY, 6, 5, legColor);
                  if (waistStyle === 1) { drawRect(13, waistY, 6, 2, wColor); } 
                  else if (waistStyle === 2) { drawShadedRect(12, waistY, 8, 5, wColor); } 
                  else if (waistStyle === 3) { drawRect(12, waistY, 8, 5, wColor); } 
-                 else if (waistStyle === 4) { drawShadedRect(12, waistY, 8, 5, wColor); }
+                 else if (waistStyle === 4) { drawShadedRect(12, waistY, 8, 5, wColor, true); }
             }
         };
         drawWaist(drawMode);
@@ -622,8 +740,7 @@ const SpriteRenderer = forwardRef(({
         }
     }
 
-    // 4. HEAD & EQUIPMENT (Layer 2)
-    setLayer(2);
+    setLayer(3);
     if (baseType !== 1) { 
         drawWings(false);
         drawTail(false);
@@ -636,26 +753,14 @@ const SpriteRenderer = forwardRef(({
         const sH = animationFrame === 0 ? 14 : 12;
         const sX = (32 - sW) / 2;
         const sY = 32 - sH;
-        // Eyes logic for slime
+        
         const eyeY = sY + 4;
         if (drawMode !== 3) {
-             const eC = eyeColor;
-             if (eyeStyle === 0) {
-                 drawRect(sX + 4, eyeY, 2, 2, eC); drawRect(sX + sW - 6, eyeY, 2, 2, eC);
-             } else if (eyeStyle === 1) { // Sleepy
-                 drawRect(sX + 4, eyeY+1, 2, 1, eC); drawRect(sX + sW - 6, eyeY+1, 2, 1, eC);
-             } else if (eyeStyle === 2) { // Tall
-                 drawRect(sX + 4, eyeY-1, 2, 3, eC); drawRect(sX + sW - 6, eyeY-1, 2, 3, eC);
-             } 
-
-             if(hasWhiteEye && eyeStyle !== 1) { 
-                 drawPixel(sX+4, eyeY, '#fff'); drawPixel(sX+sW-6, eyeY, '#fff'); 
-             }
-             drawRect(sX + 7, eyeY + 4, 4, 1, '#7f8c8d');
+             drawEyeUnit(sX + 4, eyeY, eyeStyle, eyeColor, false);
+             drawEyeUnit(sX + sW - 5, eyeY, eyeStyle, eyeColor, false);
         }
         
-        // --- Slime Hair ---
-        if (hairStyle !== 4) { // Not Skinhead
+        if (hairStyle !== 4) { 
              const hY = sY - 2; 
              const hColor = hairColor;
              const fillHair = (x, y, w, h) => { drawRect(x, y, w, h, hColor); };
@@ -664,13 +769,19 @@ const SpriteRenderer = forwardRef(({
              else if (hairStyle === 1) { fillHair(sX+2, hY, sW-4, 8); }
              else if (hairStyle === 2) { fillHair(sX+4, hY-2, sW-8, 5); }
              else if (hairStyle === 3) { fillHair(sX+1, hY, sW-2, 6); }
-             // hairStyle === 4 は描画しない (Skinhead)
         }
     } 
     else {
         const fillHead = (x, y, w, h, c) => {
-            drawRect(x, y, w, h, c);
-            if (bitMode !== '8') { drawRect(x+1, y, w-2, 1, cSkinShadow); drawRect(x+1, y+h-1, w-2, 1, cSkinShadow); if (baseType !== 2) drawPixel(x+2, y+2, cSkinLight); }
+            drawAntiAliasedBlock(x, y, w, h, c);
+            
+            if (bitMode !== '8') { 
+                drawRect(x+1, y, w-2, 1, cSkinShadow); 
+                drawRect(x+1, y+h-1, w-2, 1, cSkinShadow); 
+                if (baseType !== 2) {
+                    drawPixel(x+2, y+2, cSkinLight); 
+                }
+            }
         };
         const headColor = baseType === 2 ? '#ecf0f1' : actualSkinColor;
 
@@ -682,7 +793,6 @@ const SpriteRenderer = forwardRef(({
              if (baseType === 4 || baseType === 8) { drawRect(8, headY + 3, 2, 4, headColor); drawRect(22, headY + 3, 2, 4, headColor); }
           }
         } else { // Side
-          // 横向きの顔を薄くする (幅10 -> 8)
           fillHead(11, headY, 8, 10, headColor);
           
           if (baseType === 5) { drawRect(18, headY + 5, 4, 3, headColor); }
@@ -694,7 +804,6 @@ const SpriteRenderer = forwardRef(({
         }
 
         if (drawMode !== 3 && baseType !== 1 && helmet === 0) {
-            // Hat logic for specific Chest Style? maybe remove for now or keep simple
         }
 
         const eyeY = headY + 5;
@@ -703,9 +812,10 @@ const SpriteRenderer = forwardRef(({
                  drawRect(12, eyeY, 3, 3, '#2c3e50'); drawRect(17, eyeY, 3, 3, '#2c3e50'); drawRect(15, eyeY + 5, 2, 1, '#2c3e50'); 
             } else {
                  if (baseType === 6) { drawRect(14, eyeY + 2, 4, 2, '#f1c40f'); }
-                 if (eyeStyle === 0) { if (hasWhiteEye) { drawRect(11, eyeY, 4, 2, '#fff'); drawRect(17, eyeY, 4, 2, '#fff'); } drawRect(12, eyeY, 2, 2, eyeColor); drawRect(18, eyeY, 2, 2, eyeColor); if(bitMode !== '8') { drawPixel(12, eyeY, '#fff'); drawPixel(18, eyeY, '#fff'); } }
-                 else if (eyeStyle === 1) { if (hasWhiteEye) { drawRect(11, eyeY + 1, 4, 1, '#fff'); drawRect(17, eyeY + 1, 4, 1, '#fff'); } drawRect(12, eyeY + 1, 2, 1, eyeColor); drawRect(18, eyeY + 1, 2, 1, eyeColor); }
-                 else if (eyeStyle === 2) { if (hasWhiteEye) { drawRect(11, eyeY - 1, 4, 3, '#fff'); drawRect(17, eyeY - 1, 4, 3, '#fff'); } drawRect(12, eyeY - 1, 2, 3, eyeColor); drawRect(18, eyeY - 1, 2, 3, eyeColor); }
+                 
+                 // ★ 修正: 11->12, 17->18
+                 drawEyeUnit(12, eyeY, eyeStyle, eyeColor, false); // Left Eye
+                 drawEyeUnit(18, eyeY, eyeStyle, eyeColor, false); // Right Eye
                  
                  if (hasFangs || baseType === 4 || baseType === 7) { drawPixel(13, eyeY + 3, '#fff'); drawPixel(18, eyeY + 3, '#fff'); }
                  if (baseType === 9) { // Dwarf Beard
@@ -717,8 +827,7 @@ const SpriteRenderer = forwardRef(({
         } else if (drawMode === 1) { // Side
           const eyeX = 11;
           if (baseType === 2) { drawRect(eyeX + 1, eyeY, 3, 3, '#2c3e50'); } else {
-              let y = eyeY, h = 2; if (eyeStyle === 1) { y += 1; h = 1; } if (eyeStyle === 2) { y -= 1; h = 3; }
-              if (hasWhiteEye) { drawRect(eyeX, y, 3, h, '#fff'); drawRect(eyeX + 1, y, 1, h, eyeColor); } else { drawRect(eyeX, y, 2, h, eyeColor); }
+              drawEyeUnit(11, eyeY, eyeStyle, eyeColor, true); // Single Eye
               
               if (hasFangs || baseType === 4 || baseType === 7) drawPixel(eyeX + 1, eyeY + 3, '#fff');
               if (baseType === 9) {
@@ -732,21 +841,21 @@ const SpriteRenderer = forwardRef(({
         if (baseType !== 1) { 
             if (helmet > 0) {
                 if (drawMode === 0) { 
-                    if (helmet === 1) { drawShadedRect(9, headY - 3, 14, 6, helmetColor); drawRect(15, headY - 4, 2, 9, '#2c3e50'); } 
-                    else if (helmet === 2) { drawShadedRect(9, headY - 2, 14, 4, helmetColor); drawRect(8, headY - 4, 2, 4, '#fff'); drawRect(22, headY - 4, 2, 4, '#fff'); } 
+                    if (helmet === 1) { drawShadedRect(9, headY - 3, 14, 6, helmetColor, true); drawRect(15, headY - 4, 2, 9, '#2c3e50'); } 
+                    else if (helmet === 2) { drawShadedRect(9, headY - 2, 14, 4, helmetColor, true); drawRect(8, headY - 4, 2, 4, '#fff'); drawRect(22, headY - 4, 2, 4, '#fff'); } 
                     else if (helmet === 3) { drawRect(7, headY - 1, 18, 2, helmetColor); drawRect(10, headY - 8, 12, 7, helmetColor); drawRect(12, headY - 12, 8, 4, helmetColor); } 
                     else if (helmet === 4) { drawRect(8, headY - 3, 16, 13, helmetColor); drawRect(11, headY, 10, 8, 'rgba(0,0,0,0.3)'); } 
                 } else if (drawMode === 1) { 
-                    if (helmet === 1) { drawShadedRect(10, headY - 3, 12, 6, helmetColor); }
-                    else if (helmet === 2) { drawShadedRect(10, headY - 2, 12, 4, helmetColor); drawRect(12, headY - 4, 2, 4, '#fff'); }
+                    if (helmet === 1) { drawShadedRect(10, headY - 3, 12, 6, helmetColor, true); }
+                    else if (helmet === 2) { drawShadedRect(10, headY - 2, 12, 4, helmetColor, true); drawRect(12, headY - 4, 2, 4, '#fff'); }
                     else if (helmet === 3) { drawRect(9, headY - 1, 14, 2, helmetColor); drawRect(11, headY - 8, 10, 7, helmetColor); drawRect(13, headY - 12, 6, 4, helmetColor); }
                     else if (helmet === 4) { 
                         drawRect(10, headY - 3, 13, 13, helmetColor); 
                         drawRect(10, headY + 1, 2, 6, adjustColor(helmetColor, -30));
                     }
                 } else if (drawMode === 3) { 
-                    if (helmet === 1) { drawShadedRect(9, headY - 3, 14, 10, helmetColor); }
-                    else if (helmet === 2) { drawShadedRect(9, headY - 2, 14, 8, helmetColor); }
+                    if (helmet === 1) { drawShadedRect(9, headY - 3, 14, 10, helmetColor, true); }
+                    else if (helmet === 2) { drawShadedRect(9, headY - 2, 14, 8, helmetColor, true); }
                     else if (helmet === 3) { drawRect(7, headY - 1, 18, 2, helmetColor); drawRect(10, headY - 8, 12, 7, helmetColor); }
                     else if (helmet === 4) { drawRect(8, headY - 3, 16, 14, helmetColor); }
                 }
@@ -757,23 +866,35 @@ const SpriteRenderer = forwardRef(({
                         fillHair(10, headY - 2, 12, 3); drawPixel(13, headY+1, hairColor); drawPixel(15, headY+1, hairColor); drawPixel(17, headY+1, hairColor);
                         if (hairStyle === 1) fillHair(11, headY, 10, 2); else if (hairStyle === 2) { drawRect(14, headY - 4, 4, 4, hairColor); drawRect(10, headY - 1, 12, 2, hairColor); } else if (hairStyle === 3) { drawRect(11, headY, 3, 3, hairColor); drawRect(18, headY, 3, 3, hairColor); } 
                     } else if (drawMode === 1) { 
-                        // 横向きの髪を、後頭部の隙間を埋めるように調整
-                        
-                        fillHair(11, headY - 2, 10, 3); // Top
-                        drawRect(10, headY, 2, 4, hairColor); // Front bang
-                        
+                        // 横向きの髪を修正 (おでこをカバー)
+                        fillHair(11, headY - 1, 8, 3); // 頭頂部
+                        drawRect(10, headY + 1, 2, 3, hairColor); // 前髪
+
                         if (hairStyle === 0) { // Short
-                             drawRect(15, headY, 6, 7, hairColor); 
+                             drawRect(14, headY, 5, 6, hairColor); 
+                             drawRect(18, headY + 3, 1, 3, hairColor); // 襟足
+                             if(bitMode !== '8') {
+                                 drawPixel(12, headY + 1, cHairLight);
+                             }
                         }
                         else if (hairStyle === 1) { // Long
-                             drawRect(15, headY, 8, 12, hairColor);
+                             drawRect(14, headY, 6, 11, hairColor); 
+                             drawRect(15, headY + 8, 5, 3, hairColor); 
+                             if(bitMode !== '8') {
+                                 drawRect(14, headY+3, 6, 1, cHairLight); 
+                             }
                         }
                         else if (hairStyle === 2) { // Spiky
-                             drawRect(13, headY - 4, 6, 4, hairColor); 
-                             drawRect(11, headY - 1, 10, 2, hairColor); 
+                             drawRect(11, headY - 2, 8, 4, hairColor); 
+                             drawRect(10, headY, 2, 3, hairColor); 
+                             drawPixel(13, headY - 3, hairColor); 
+                             drawPixel(16, headY - 3, hairColor); 
+                             drawRect(18, headY, 2, 3, hairColor); 
                         }
                         else if (hairStyle === 3) { // Bob
-                             drawRect(15, headY + 1, 6, 8, hairColor);
+                             drawRect(11, headY - 1, 8, 7, hairColor); 
+                             drawRect(10, headY + 1, 2, 5, hairColor); 
+                             drawRect(11, headY + 6, 7, 2, hairColor); 
                         }
                     } else if (drawMode === 3) { 
                         if (hairStyle === 0) { fillHair(10, headY - 2, 12, 3); drawRect(9, headY, 14, 6, hairColor); drawRect(11, headY + 6, 10, 2, hairColor); } else if (hairStyle === 1) { fillHair(10, headY - 2, 12, 3); drawRect(9, headY, 14, 12, hairColor); } else if (hairStyle === 2) { drawRect(14, headY - 4, 4, 4, hairColor); drawRect(10, headY - 1, 12, 2, hairColor); drawRect(9, headY, 14, 5, hairColor); } else if (hairStyle === 3) { fillHair(10, headY - 2, 12, 4); drawRect(8, headY + 1, 16, 8, hairColor); } 
@@ -816,6 +937,7 @@ const SpriteRenderer = forwardRef(({
       ctx.drawImage(buffers[0], 0, 0);
       ctx.drawImage(buffers[1], 0, 0);
       ctx.drawImage(buffers[2], 0, 0);
+      ctx.drawImage(buffers[3], 0, 0);
       ctx.globalAlpha = 1.0;
     };
 

@@ -71,7 +71,13 @@ export const TRANSLATIONS = {
     chestOpt: ['Bare', 'Tunic', 'Armor', 'Robe', 'Coat', 'Bikini'],
     waistOpt: ['Pants Only', 'Belt', 'Skirt', 'Loincloth', 'Armor Skirt'],
     hairStyles: ['Short', 'Long', 'Spiky', 'Bob', 'Skinhead'], 
-    eyeStyles: ['Normal', 'Sleepy', 'Tall'], 
+    
+    // 目のスタイルを9種類に更新
+    eyeStyles: [
+      'Normal', 'Cool', 'Round', 'Jito', 
+      'Wide', 'Happy', 'Closed', 'Cat/Snake', 'Hollow'
+    ], 
+    
     shoeStyles: ['Barefoot', 'Shoes', 'Boots'],
     accHead: ['None', 'Cat Ears', 'Crown'],
     accEye: ['None', 'Glasses', 'Sunglasses', 'Monocle', 'Scouter', 'Eyepatch'],
@@ -135,7 +141,13 @@ export const TRANSLATIONS = {
     chestOpt: ['裸', 'チュニック', '鎧', 'ローブ', 'コート', 'ビキニ'],
     waistOpt: ['ズボンのみ', 'ベルト', 'スカート', '腰布', '垂れ'],
     hairStyles: ['ショート', 'ロング', 'ツンツン', 'ボブ', 'スキンヘッド'],
-    eyeStyles: ['普通', '眠そう', '縦長'],
+    
+    // 目のスタイルを9種類に更新
+    eyeStyles: [
+      '普通', 'クール', 'つぶら', 'ジト目', 
+      '見開き', '笑顔', '閉じ目', '猫目', '虚ろ'
+    ],
+    
     shoeStyles: ['裸足', '靴', 'ブーツ'],
     accHead: ['なし', '猫耳', '王冠'],
     accEye: ['なし', 'メガネ', 'サングラス', 'モノクル', 'スカウター', '眼帯'],
