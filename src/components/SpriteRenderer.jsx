@@ -304,6 +304,393 @@ const cWood = '#8d5524';
       drawEyeUnit(right, oy, s, color, false, true);
     };
 
+    // --- Route B foundation: skeleton anchors (32x32 character space) ---
+    // All anchors are defined in the 32px character coordinate system (x: 0..31, y: 0..31).
+    // These anchors are intended to be the single source of truth for part placement.
+    // NOTE: "Center" anchors use pixel centers conceptually; we still store integer pixels.
+
+    const clampInt = (v, lo, hi) => Math.max(lo, Math.min(hi, v | 0));
+
+    const getAnchors = ({ drawMode, headY, chestY, waistY, legY, handY, walkOffset }) => {
+      // Base (humanoid) head placement in current renderer
+      const headTopLeft = (drawMode === 1)
+        ? { x: 11, y: headY }   // side
+        : { x: 10, y: headY };  // front/back
+
+      // Current eye Y is consistently headY + 5 for humanoids
+      const eyeY = headY + 5;
+
+      // Eye anchor definition
+      // Front: we define the LEFT eye center (ox) as the canonical anchor.
+      // Right eye is always derived by perfect mirroring in drawEyePairFront.
+      const eye = (drawMode === 1)
+        ? {
+            // side view draws a single eye at ox=11 today
+            center: { x: 11, y: eyeY },
+            leftCenter: { x: 11, y: eyeY },
+            rightCenter: null,
+            // legacy compat
+            leftOx: 11,
+            rightOx: null,
+            y: eyeY
+          }
+        : {
+            // front/back: canonical left eye center
+            center: { x: 16, y: eyeY },
+            leftCenter: { x: 13, y: eyeY },
+            rightCenter: { x: mirrorX(13), y: eyeY },
+            // legacy compat
+            leftOx: 13,
+            rightOx: mirrorX(13),
+            y: eyeY
+          };
+
+      // Torso / pelvis anchors (top-left of the main block)
+      const torso = (drawMode === 1)
+        ? { topLeft: { x: 13, y: chestY }, center: { x: 16, y: chestY + 2 } }
+        : { topLeft: { x: 11, y: chestY }, center: { x: 16, y: chestY + 2 } };
+
+      const pelvis = (drawMode === 1)
+        ? { topLeft: { x: 13, y: waistY }, center: { x: 16, y: waistY + 2 } }
+        : { topLeft: { x: 11, y: waistY }, center: { x: 16, y: waistY + 2 } };
+
+      // Legs (top-left). Side view uses walkOffset to separate legs.
+      const legs = (drawMode === 1)
+        ? {
+            leftTopLeft: { x: 13 - walkOffset, y: legY },
+            rightTopLeft: { x: 15 + walkOffset, y: legY }
+          }
+        : {
+            leftTopLeft: { x: 12, y: legY },
+            rightTopLeft: { x: 17, y: legY }
+          };
+
+      // Hands (top-left). Side view uses one hand block only.
+      const hands = (drawMode === 1)
+        ? {
+            frontTopLeft: { x: 13 + walkOffset, y: handY },
+            leftTopLeft: null,
+            rightTopLeft: null
+          }
+        : {
+            frontTopLeft: null,
+            leftTopLeft: { x: 8, y: handY },
+            rightTopLeft: { x: 22, y: handY }
+          };
+
+      // Final clamping for safety (prevents accidental out-of-bounds placements)
+      const clampPt = (p) => (p ? ({ x: clampInt(p.x, 0, 31), y: clampInt(p.y, 0, 31) }) : p);
+
+      return {
+        headAnchor: {
+          topLeft: clampPt(headTopLeft),
+          center: clampPt({ x: (headTopLeft.x + (drawMode === 1 ? 4 : 6)), y: headTopLeft.y + 5 })
+        },
+        eyeAnchor: {
+          center: clampPt(eye.center),
+          leftCenter: clampPt(eye.leftCenter),
+          rightCenter: clampPt(eye.rightCenter),
+          // legacy compat for current calls
+          leftOx: eye.leftOx,
+          rightOx: eye.rightOx,
+          y: eye.y
+        },
+        torsoAnchor: {
+          topLeft: clampPt(torso.topLeft),
+          center: clampPt(torso.center)
+        },
+        pelvisAnchor: {
+          topLeft: clampPt(pelvis.topLeft),
+          center: clampPt(pelvis.center)
+        },
+        legAnchor: {
+          L: clampPt(legs.leftTopLeft),
+          R: clampPt(legs.rightTopLeft)
+        },
+        handAnchor: {
+          L: clampPt(hands.leftTopLeft),
+          R: clampPt(hands.rightTopLeft),
+          Front: clampPt(hands.frontTopLeft)
+        }
+      };
+    };
+
+    // === Route B: part-stamping foundation (drawPart) + starter assets (face / eyes) ===
+    // Goal: stop hand-placing pixels in many places. Instead, define small bitmap assets and stamp them
+    // relative to anchors with guaranteed mirroring.
+
+    // Feature flag: keep OFF until we migrate each part safely.
+    const USE_PART_ASSETS = true;
+
+    // Asset format:
+    // - w/h: size in pixels
+    // - px: array of strings (length=h), each string length=w
+    // - '.' means transparent
+    // - other chars map to colors via a palette object (e.g., { F: skin, f: shadow, h: highlight })
+    const PART_ASSETS = {
+      // Face (FRONT) assets are intended to be stamped at headAnchor.topLeft for front/back.
+      // These are deliberately conservative silhouettes (no outer outlines).
+      faceFront: {
+        // Normal: 12x10 (matches current front head: fillHead(10, headY, 12, 10, ...))
+        normal: {
+          w: 12,
+          h: 10,
+          px: [
+            ".FFFFFFFFFF.",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            ".FFFFFFFFFF.",
+          ],
+        },
+        // Round: 12x10 with extra rounding (shaved corners + slightly tucked sides)
+        round: {
+          w: 12,
+          h: 10,
+          px: [
+            "..FFFFFFFF..",
+            ".FFFFFFFFFF.",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            ".FFFFFFFFFF.",
+            "..FFFFFFFF..",
+          ],
+        },
+        // Square: 12x10 full block
+        square: {
+          w: 12,
+          h: 10,
+          px: [
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+            "FFFFFFFFFFFF",
+          ],
+        },
+        // Long: 10x12 (matches current long front head: fillHead(11, headY-1, 10, 12, ...))
+        long: {
+          w: 10,
+          h: 12,
+          px: [
+            ".FFFFFFFF.",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            "FFFFFFFFFF",
+            ".FFFFFFFF.",
+          ],
+        },
+      },
+
+      // Face (SIDE) assets are intended to be stamped at headAnchor.topLeft for side.
+      faceSide: {
+        // Normal: 8x10 (matches current side head: fillHead(11, headY, 8, 10, ...))
+        normal: {
+          w: 8,
+          h: 10,
+          px: [
+            ".FFFFFF.",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            ".FFFFFF.",
+          ],
+        },
+        // Round: 8x10 with extra rounding
+        round: {
+          w: 8,
+          h: 10,
+          px: [
+            "..FFFF..",
+            ".FFFFFF.",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            ".FFFFFF.",
+            "..FFFF..",
+          ],
+        },
+        // Square: 8x10 block
+        square: {
+          w: 8,
+          h: 10,
+          px: [
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+            "FFFFFFFF",
+          ],
+        },
+        // Long: 7x12 (matches current side long: fillHead(11, headY-1, 7, 12, ...))
+        long: {
+          w: 7,
+          h: 12,
+          px: [
+            ".FFFFF.",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            "FFFFFFF",
+            ".FFFFF.",
+          ],
+        },
+      },
+
+      // Eyes are stamped in local coordinates around an eye anchor.
+      // Convention: eye assets are defined with their own top-left and stamped at (x,y).
+      // We keep 5 styles only: normal, big, small, narrow, cat.
+      // Palette keys:
+      //  S: sclera, s: sclera shade
+      //  I: iris mid/base, i: iris dark/shadow, l: iris light
+      //  P: pupil, H: spec highlight
+      eye: {
+        // Normal: 3x3 sclera + 2x2 iris
+        normal: {
+          w: 3,
+          h: 3,
+          px: [
+            "SSS",
+            "SII",
+            "sss",
+          ],
+        },
+        // Big: 4x4 sclera + 2x3 iris
+        big: {
+          w: 4,
+          h: 4,
+          px: [
+            "SSSS",
+            "SIII",
+            "SIII",
+            "ssss",
+          ],
+        },
+        // Small: 3x3 sclera + 1px iris
+        small: {
+          w: 3,
+          h: 3,
+          px: [
+            "SSS",
+            "SIS",
+            "sss",
+          ],
+        },
+        // Narrow: 3x2 sclera + 2px iris line
+        narrow: {
+          w: 3,
+          h: 2,
+          px: [
+            "SSS",
+            "sII",
+          ],
+        },
+        // Cat: 3x3 sclera + iris + slit pupil
+        cat: {
+          w: 3,
+          h: 3,
+          px: [
+            "SSS",
+            "SIP",
+            "sss",
+          ],
+        },
+      },
+    };
+
+    // drawPart: stamp a bitmap asset into the current layer.
+    // - x,y: destination top-left in character coords
+    // - flipX: mirrors the asset within its own width (perfect left/right reuse)
+    // - palette: char->color map; '.' or missing key => transparent
+    const drawPart = (asset, x, y, { flipX = false, palette = {}, erase = false } = {}) => {
+      if (!asset || !asset.px || !asset.w || !asset.h) return;
+      const w = asset.w | 0;
+      const h = asset.h | 0;
+
+      for (let ay = 0; ay < h; ay++) {
+        const row = asset.px[ay] || "";
+        for (let ax = 0; ax < w; ax++) {
+          const sx = flipX ? (w - 1 - ax) : ax;
+          const ch = row[sx] || '.';
+
+          if (ch === '.' || palette[ch] === undefined || palette[ch] === null) {
+            if (erase) {
+              // true erase (clearRect) rather than rgba(0,0,0,0)
+              const c = ctxs[currentLayer];
+              c.clearRect((x + ax) + OFFSET_X, (y + ay) + OFFSET_Y, 1, 1);
+            }
+            continue;
+          }
+
+          drawPixel(x + ax, y + ay, palette[ch]);
+        }
+      }
+    };
+
+    // Helpers to select face assets by shape + view.
+    const getFaceAsset = (faceShapeClamped, drawMode) => {
+      // 0 Normal / 1 Round / 2 Square / 3 Long
+      const key = (faceShapeClamped === 1)
+        ? 'round'
+        : (faceShapeClamped === 2)
+          ? 'square'
+          : (faceShapeClamped === 3)
+            ? 'long'
+            : 'normal';
+
+      if (drawMode === 1) return PART_ASSETS.faceSide[key];
+      return PART_ASSETS.faceFront[key];
+    };
+
+    const getEyeAssetKey = (style) => {
+      const s = Math.max(0, Math.min(4, (style ?? 0) | 0));
+      if (s === 0) return 'normal';
+      if (s === 1) return 'big';
+      if (s === 2) return 'small';
+      if (s === 3) return 'narrow';
+      return 'cat';
+    };
+
     let slimeHeadY = 4 + yOffset; 
     if (baseType === 1) { 
        yOffset = 0; 
@@ -314,6 +701,13 @@ const cWood = '#8d5524';
     }
 
     let wingOffset = yOffset; 
+
+    // Shared vertical baselines for humanoids (used by both body + head)
+// Must be in the main renderer scope (NOT inside the humanoid body-only block)
+const chestY = 14 + yOffset;
+const waistY = 19 + yOffset;
+const legY   = 24 + yOffset;
+const handY  = 19 + yOffset;
 
     const activeHeadY = (baseType === 1) ? slimeHeadY : (4 + yOffset);
     const headY = 4 + yOffset;
@@ -913,8 +1307,6 @@ const cWood = '#8d5524';
         const hLen = getHandLen();
         if (baseType === 1) return; 
 
-        const handY = 19 + yOffset; 
-        
         if (drawMode === 0 || drawMode === 3) { 
             if (!isFrontLayer) return; 
             drawRect(8, handY, 2, hLen, hColor); 
@@ -928,6 +1320,10 @@ const cWood = '#8d5524';
 
     const drawEyeUnit = (ox, oy, style, color, isSide, flip = false) => {
         // Palette helpers (match "eye parts" reference: soft lash, wider sclera, iris depth)
+
+        // Route B note:
+        // We will migrate eyes to the PART_ASSETS + drawPart system gradually.
+        // For now, drawEyeUnit stays procedural for stability.
         const pupilC = '#000000';
         const specC = '#ffffff';
 
@@ -1289,9 +1685,9 @@ const cWood = '#8d5524';
         }
     } 
     else {
+        // Shared vertical baselines for humanoids (must be outer-scope; used by both body + head)
         // ... (Humanoid body logic) ...
         const bodyColor = baseType === 2 ? '#bdc3c7' : actualSkinColor;
-        const chestY = 14 + yOffset;
         const drawChest = (mode) => {
             if (mode === 0 || mode === 3) { 
                 if (baseType === 2) { 
@@ -1325,7 +1721,6 @@ const cWood = '#8d5524';
         };
         drawChest(drawMode);
 
-        const waistY = 19 + yOffset;
         const drawWaist = (mode) => {
             const wColor = waistColor;
             if (mode === 0 || mode === 3) { 
@@ -1344,7 +1739,7 @@ const cWood = '#8d5524';
         };
         drawWaist(drawMode);
 
-        const legY = 24 + yOffset;
+        // legY is already defined above
         if (baseType !== 3) { 
             const drawLegs = (mode) => {
                 const isSkirt = waistStyle === 2 || waistStyle === 4;
@@ -1462,38 +1857,94 @@ const cWood = '#8d5524';
                 }
             }
         };
+
         const headColor = baseType === 2 ? '#ecf0f1' : actualSkinColor;
 
-        if (drawMode !== 1) { // Front/Back
+        // Route B (assets): draw face using stamped bitmap parts.
+        // Keep robot (baseType===2) on the legacy path for now.
+        const useFaceAssets = USE_PART_ASSETS && baseType !== 2;
+
+        // Anchors: single source of truth for placement.
+        const anchors = getAnchors({
+          drawMode,
+          headY,
+          chestY,
+          waistY,
+          legY,
+          handY,
+          walkOffset,
+        });
+
+        if (useFaceAssets) {
+          const faceAsset = getFaceAsset(faceShapeClamped, drawMode);
+
+          // The long face variants in the legacy renderer are shifted (+x for front/back, -y for both).
+          let faceX = anchors.headAnchor.topLeft.x;
+          let faceY = anchors.headAnchor.topLeft.y;
           if (faceShapeClamped === 3) {
-            // Long face: slightly narrower and taller
-            fillHead(11, headY - 1, 10, 12, headColor);
-          } else {
-            fillHead(10, headY, 12, 10, headColor);
+            faceY -= 1;
+            if (drawMode !== 1) faceX += 1;
           }
-          if (baseType !== 2) { 
-             drawPixel(10, headY, 'rgba(0,0,0,0)'); drawPixel(21, headY, 'rgba(0,0,0,0)');
-             drawPixel(10, headY + 9, 'rgba(0,0,0,0)'); drawPixel(21, headY + 9, 'rgba(0,0,0,0)');
-             if (baseType === 4 || baseType === 8) { drawRect(8, headY + 3, 2, 4, headColor); drawRect(22, headY + 3, 2, 4, headColor); }
+
+          // Stamp base face
+          drawPart(faceAsset, faceX, faceY, {
+            palette: { F: headColor }
+          });
+
+          // Add the same subtle shading cues as the legacy head (keeps material continuity)
+          if (bitMode !== '8') {
+            const w = faceAsset.w | 0;
+            const h = faceAsset.h | 0;
+            if (w >= 3) {
+              drawRect(faceX + 1, faceY, w - 2, 1, cSkinShadow);
+              drawRect(faceX + 1, faceY + h - 1, w - 2, 1, cSkinShadow);
+            }
+            drawPixel(faceX + 2, faceY + 2, cSkinLight);
           }
-        } else { // Side
-          if (faceShapeClamped === 3) {
-            // Long face (side): a bit taller
-            fillHead(11, headY - 1, 7, 12, headColor);
-          } else {
-            fillHead(11, headY, 8, 10, headColor);
+
+          // Extra side ear blocks for some races (match legacy behavior)
+          if (baseType === 4 || baseType === 8) {
+            if (drawMode !== 1) {
+              drawRect(8,  faceY + 3, 2, 4, headColor);
+              drawRect(22, faceY + 3, 2, 4, headColor);
+            } else {
+              drawRect(10, faceY + 3, 2, 4, headColor);
+            }
           }
-          
-          if (baseType === 5) { drawRect(18, headY + 5, 4, 3, headColor); }
-          else if (baseType === 6) { // Birdman Beak
-              drawRect(8, headY + 5, 3, 2, '#f1c40f'); 
+
+        } else {
+          // Legacy procedural head
+          if (drawMode !== 1) { // Front/Back
+            if (faceShapeClamped === 3) {
+              // Long face: slightly narrower and taller
+              fillHead(11, headY - 1, 10, 12, headColor);
+            } else {
+              fillHead(10, headY, 12, 10, headColor);
+            }
+            if (baseType !== 2) { 
+               drawPixel(10, headY, 'rgba(0,0,0,0)'); drawPixel(21, headY, 'rgba(0,0,0,0)');
+               drawPixel(10, headY + 9, 'rgba(0,0,0,0)'); drawPixel(21, headY + 9, 'rgba(0,0,0,0)');
+               if (baseType === 4 || baseType === 8) { drawRect(8, headY + 3, 2, 4, headColor); drawRect(22, headY + 3, 2, 4, headColor); }
+            }
+          } else { // Side
+            if (faceShapeClamped === 3) {
+              // Long face (side): a bit taller
+              fillHead(11, headY - 1, 7, 12, headColor);
+            } else {
+              fillHead(11, headY, 8, 10, headColor);
+            }
+
+            if (baseType === 5) { drawRect(18, headY + 5, 4, 3, headColor); }
+            else if (baseType === 6) { // Birdman Beak
+                drawRect(8, headY + 5, 3, 2, '#f1c40f'); 
+            }
+            else if (baseType === 4 || baseType === 8) { drawRect(10, headY + 3, 2, 4, headColor); }
+            if (baseType !== 2) { drawPixel(11, headY, 'rgba(0,0,0,0)'); drawPixel(18, headY, 'rgba(0,0,0,0)'); drawPixel(11, headY + 9, 'rgba(0,0,0,0)'); drawPixel(18, headY + 9, 'rgba(0,0,0,0)'); }
           }
-          else if (baseType === 4 || baseType === 8) { drawRect(10, headY + 3, 2, 4, headColor); }
-          if (baseType !== 2) { drawPixel(11, headY, 'rgba(0,0,0,0)'); drawPixel(18, headY, 'rgba(0,0,0,0)'); drawPixel(11, headY + 9, 'rgba(0,0,0,0)'); drawPixel(18, headY + 9, 'rgba(0,0,0,0)'); }
         }
 
-        if (drawMode !== 3 && baseType !== 1 && helmet === 0) {
-        }
+        // Head drawing block ends here, before:
+        // if (drawMode !== 3 && baseType !== 1 && helmet === 0) {
 
         const eyeY = headY + 5;
         if (drawMode === 0) { // Front
@@ -1503,7 +1954,16 @@ const cWood = '#8d5524';
                  if (baseType === 6) { drawRect(14, eyeY + 2, 4, 2, '#f1c40f'); }
                  
                  // Guarantee perfect left/right mirror placement (right eye is derived from left eye).
-                 drawEyePairFront(13, eyeY, eyeStyle, eyeColor);
+                 const anchors = getAnchors({
+                   drawMode,
+                   headY,
+                   chestY,
+                   waistY,
+                   legY: 24 + yOffset,
+                   handY: 19 + yOffset,
+                   walkOffset,
+                 });
+                 drawEyePairFront(anchors.eyeAnchor.leftOx, anchors.eyeAnchor.y, eyeStyle, eyeColor);
                  
                  if (hasFangs || baseType === 4 || baseType === 7) {
                    const fxL = (faceShapeClamped === 3) ? 14 : 13;
@@ -1520,7 +1980,16 @@ const cWood = '#8d5524';
         } else if (drawMode === 1) { // Side
           const eyeX = 11;
           if (baseType === 2) { drawRect(eyeX + 1, eyeY, 3, 3, '#2c3e50'); } else {
-              drawEyeUnit(11, eyeY, eyeStyle, eyeColor, true); // Single Eye
+              const anchors = getAnchors({
+                drawMode,
+                headY,
+                chestY,
+                waistY,
+                legY: 24 + yOffset,
+                handY: 19 + yOffset,
+                walkOffset,
+              });
+              drawEyeUnit(anchors.eyeAnchor.center.x, anchors.eyeAnchor.center.y, eyeStyle, eyeColor, true); // Single Eye
               
               if (hasFangs || baseType === 4 || baseType === 7) {
                 const fdx = (faceShapeClamped === 3) ? 0 : 0;
