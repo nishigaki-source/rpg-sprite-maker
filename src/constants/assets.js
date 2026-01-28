@@ -1,3 +1,5 @@
+// src/constants/assets.js
+
 export const UNIVERSAL_PALETTE = [
   '#ffffff', '#dfe6e9', '#bdc3c7', '#95a5a6', '#7f8c8d', '#636e72', '#2d3436', '#2c3e50', '#000000',
   '#ff7675', '#d63031', '#c0392b', '#e84393', '#fd79a8',
@@ -63,19 +65,18 @@ export const TRANSLATIONS = {
     shieldColor: "Shield Color",
     helmetColor: "Helmet Color",
     
-    // ★ 必要な項目
     bitMode: "Quality",
     bitModes: ['8-BIT', '16-BIT', '32-BIT'],
     reset: "Reset",
 
     races: ['Human', 'Slime', 'Skeleton', 'Ghost', 'Goblin', 'Lizardman', 'Birdman', 'Demon', 'Elf', 'Dwarf'],
     chestOpt: ['Bare', 'Tunic', 'Armor', 'Robe', 'Coat', 'Bikini'],
-    waistOpt: ['Pants Only', 'Belt', 'Skirt', 'Loincloth', 'Armor Skirt'],
+    // Bare を追加
+    waistOpt: ['Pants Only', 'Belt', 'Skirt', 'Loincloth', 'Armor Skirt', 'Bare'],
     hairStyles: ['Short', 'Long', 'Spiky', 'Bob', 'Skinhead'], 
 
     faceShapes: ['Normal', 'Round', 'Square', 'Long'],
 
-    // Eye styles (5)
     eyeStyles: [
       'Normal', 'Big', 'Small', 'Narrow', 'Cat'
     ],
@@ -84,7 +85,6 @@ export const TRANSLATIONS = {
     accEye: ['None', 'Glasses', 'Sunglasses', 'Monocle', 'Scouter', 'Eyepatch'],
     accEar: ['None', 'Gold Ring', 'Silver Stud', 'Red Gem', 'Blue Gem'],
     optHorns: ['None', 'Small', 'Bull', 'Unicorn', 'Demon', 'Ram', 'Antlers'],
-    // Mechanical -> Demon に変更
     optWings: ['None', 'Bat', 'Angel', 'Fairy', 'Dragon', 'Butterfly', 'Demon'],
     optTail: ['None', 'Demon', 'Beast', 'Lizard', 'Fox', 'Cat'],
     optWeapon: ['None', 'Sword', 'Staff', 'Bow', 'Spear', 'Axe', 'Dagger'],
@@ -135,19 +135,18 @@ export const TRANSLATIONS = {
     shieldColor: "盾の色",
     helmetColor: "兜の色",
     
-    // ★ 必要な項目
     bitMode: "画質",
     bitModes: ['8-BIT (単色)', '16-BIT (陰影)', '32-BIT (高画質)'],
     reset: "リセット",
 
     races: ['人間', 'スライム', 'スケルトン', 'ゴースト', 'ゴブリン', 'リザードマン', '鳥人', '悪魔', 'エルフ', 'ドワーフ'],
     chestOpt: ['裸', 'チュニック', '鎧', 'ローブ', 'コート', 'ビキニ'],
-    waistOpt: ['ズボンのみ', 'ベルト', 'スカート', '腰布', '垂れ'],
+    // 裸 を追加
+    waistOpt: ['ズボンのみ', 'ベルト', 'スカート', '腰布', '垂れ', '裸'],
     hairStyles: ['ショート', 'ロング', 'ツンツン', 'ボブ', 'スキンヘッド'],
 
     faceShapes: ['普通', '丸顔', '四角', '面長'],
 
-    // 目のスタイル（5種類）
     eyeStyles: [
       '普通', '大きい', '小さい', '細目', '猫目'
     ],
@@ -156,7 +155,6 @@ export const TRANSLATIONS = {
     accEye: ['なし', 'メガネ', 'サングラス', 'モノクル', 'スカウター', '眼帯'],
     accEar: ['なし', '金の輪', '銀の鋲', '赤宝石', '青宝石'],
     optHorns: ['なし', '小', '牛', 'ユニコーン', '悪魔', '羊', '鹿'],
-    // 機械 -> 悪魔 に変更
     optWings: ['なし', 'コウモリ', '天使', '妖精', 'ドラゴン', '蝶', '悪魔'],
     optTail: ['なし', '悪魔', '獣', 'トカゲ', '狐', '猫'],
     optWeapon: ['なし', '剣', '杖', '弓', '槍', '斧', '短剣'],

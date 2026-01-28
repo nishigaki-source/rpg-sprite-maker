@@ -117,11 +117,11 @@ const RetroCharGen = () => {
     setCharState({
       baseType: Math.floor(Math.random() * 10), 
       skinColor: PALETTES.skin[Math.floor(Math.random() * PALETTES.skin.length)],
-      hairStyle: Math.floor(Math.random() * 5), // 修正: 0-4 (Skinheadまで)
+      hairStyle: Math.floor(Math.random() * 5), 
       hairColor: PALETTES.hair[Math.floor(Math.random() * PALETTES.hair.length)],
-      eyeStyle: Math.floor(Math.random() * 5), // 0-4 (Normal/Big/Small/Narrow/Cat)
+      eyeStyle: Math.floor(Math.random() * 5), 
       eyeColor: PALETTES.eyes[Math.floor(Math.random() * PALETTES.eyes.length)],
-      faceShape: Math.floor(Math.random() * 4), // 0-3 (Normal/Round/Square/Long)
+      faceShape: Math.floor(Math.random() * 4), 
       chestStyle: Math.floor(Math.random() * 6), 
       chestColor: PALETTES.outfit[Math.floor(Math.random() * PALETTES.outfit.length)],
       waistStyle: Math.floor(Math.random() * 5), 
@@ -130,7 +130,7 @@ const RetroCharGen = () => {
       shoeStyle: Math.floor(Math.random() * 3),
       shoeColor: PALETTES.shoes[Math.floor(Math.random() * PALETTES.shoes.length)],
       accessory: Math.floor(Math.random() * 3),
-      eyeAccessory: Math.floor(Math.random() * 6), // 修正: 0-5 (Eyepatchまで)
+      eyeAccessory: Math.floor(Math.random() * 6), 
       earAccessory: Math.floor(Math.random() * 5),
       horns: Math.random() > 0.7 ? Math.floor(Math.random() * 7) : 0, 
       hornColor: PALETTES.monster[Math.floor(Math.random() * PALETTES.monster.length)],
@@ -253,7 +253,6 @@ const RetroCharGen = () => {
                  <User size={20} className="text-blue-500" /> {text.core}
                </h2>
                <div className="flex gap-2 items-center flex-wrap justify-end">
-                   {/* 言語切り替え */}
                    <button 
                       onClick={() => setLanguage(l => l === 'en' ? 'ja' : 'en')}
                       className="flex items-center gap-1 cursor-pointer bg-gray-100 px-3 py-1 rounded-full hover:bg-gray-200 transition border border-gray-300"
@@ -261,7 +260,6 @@ const RetroCharGen = () => {
                       <Globe size={14} /> <span className="text-xs font-bold">{language === 'en' ? 'EN' : 'JP'}</span>
                    </button>
                    
-                   {/* ビットモード設定 */}
                    <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-300">
                       {['8', '16', '32'].map((mode, idx) => (
                         <button
@@ -293,7 +291,14 @@ const RetroCharGen = () => {
                     />
                 </div>
                 <div>
-                    <Selector label={text.eyes} type="index" value={charState.eyeStyle} options={text.eyeStyles} onChange={(v) => setCharState({...charState, eyeStyle: v})} 
+                    {/* 修正: スケルトン(baseType 2)の時は目を無効化 */}
+                    <Selector 
+                      label={text.eyes} 
+                      type="index" 
+                      value={charState.eyeStyle} 
+                      options={text.eyeStyles} 
+                      onChange={(v) => setCharState({...charState, eyeStyle: v})} 
+                      disabled={charState.baseType === 2}
                       subSelector={<SubColorSelector value={charState.eyeColor} options={PALETTES.eyes} onChange={(c) => setCharState({...charState, eyeColor: c})} />}
                     />
                 </div>
