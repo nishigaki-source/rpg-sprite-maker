@@ -71,14 +71,15 @@ export const TRANSLATIONS = {
 
     races: ['Human', 'Slime', 'Skeleton', 'Ghost', 'Goblin', 'Lizardman', 'Birdman', 'Demon', 'Elf', 'Dwarf'],
     chestOpt: ['Bare', 'Tunic', 'Armor', 'Robe', 'Coat', 'Bikini'],
-    // Bare を追加
     waistOpt: ['Pants Only', 'Belt', 'Skirt', 'Loincloth', 'Armor Skirt', 'Bare'],
-    hairStyles: ['Short', 'Long', 'Spiky', 'Bob', 'Skinhead'], 
+    
+    // Updated Hair Styles: Removed Ponytail/Twin Tails
+    hairStyles: ['Short', 'Long', 'Spiky', 'Bob', 'Skinhead', 'Mohawk'], 
 
     faceShapes: ['Normal', 'Round', 'Square', 'Long'],
 
     eyeStyles: [
-      'Normal', 'Big', 'Small', 'Narrow', 'Cat'
+      'Normal', 'Big', 'Small', 'Narrow', 'Cat', 'Dashing'
     ],
     shoeStyles: ['Barefoot', 'Shoes', 'Boots'],
     accHead: ['None', 'Cat Ears', 'Crown'],
@@ -141,14 +142,15 @@ export const TRANSLATIONS = {
 
     races: ['人間', 'スライム', 'スケルトン', 'ゴースト', 'ゴブリン', 'リザードマン', '鳥人', '悪魔', 'エルフ', 'ドワーフ'],
     chestOpt: ['裸', 'チュニック', '鎧', 'ローブ', 'コート', 'ビキニ'],
-    // 裸 を追加
     waistOpt: ['ズボンのみ', 'ベルト', 'スカート', '腰布', '垂れ', '裸'],
-    hairStyles: ['ショート', 'ロング', 'ツンツン', 'ボブ', 'スキンヘッド'],
+    
+    // 髪型の変更
+    hairStyles: ['ショート', 'ロング', 'ツンツン', 'ボブ', 'スキンヘッド', 'モヒカン'],
 
     faceShapes: ['普通', '丸顔', '四角', '面長'],
 
     eyeStyles: [
-      '普通', '大きい', '小さい', '細目', '猫目'
+      '普通', '大きい', '小さい', '細目', '猫目', '凛々しい'
     ],
     shoeStyles: ['裸足', '靴', 'ブーツ'],
     accHead: ['なし', '猫耳', '王冠'],

@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { PixelContext } from '../renderer/PixelContext';
 import { getAnchors } from '../renderer/LayoutUtils';
-import { drawBody, drawHead, drawHands, drawSlimeBody, drawGroundShadow } from '../renderer/layers/BodyLayer';
+import { drawBody, drawHead, drawHands, drawBackHair, drawSlimeBody, drawGroundShadow } from '../renderer/layers/BodyLayer';
 import { drawWings, drawTail, drawHorns } from '../renderer/layers/MonsterPartsLayer';
 import { drawWeapon, drawShield, drawHelmet, drawHeadAccessory, drawEyeAccessory, drawEarAccessory } from '../renderer/layers/EquipmentLayer';
 
@@ -44,7 +44,6 @@ const SpriteRenderer = forwardRef(({
       c.height = CANVAS_SIZE;
       return c;
     };
-    // 0:Shadow, 1:Back, 2:Body, 3:Head/Front
     const buffers = [createBuffer(), createBuffer(), createBuffer(), createBuffer()]; 
     const ctxs = buffers.map(b => b.getContext('2d'));
     ctxs.forEach(c => { c.imageSmoothingEnabled = false; });
@@ -64,9 +63,9 @@ const SpriteRenderer = forwardRef(({
     const drawMode = direction === 2 ? 1 : direction; 
     const isRightFacing = direction === 2;
     
-    // Animation offsets
     let yOffset = animationFrame === 1 ? 1 : 0;
     let walkOffset = animationFrame === 1 ? 1 : -1; 
+    let armOffset = animationFrame === 1 ? 1 : 0;
     let itemBob = animationFrame === 1 ? 1 : 0;
     
     if (charState.baseType === 1) { // Slime logic override
@@ -74,39 +73,50 @@ const SpriteRenderer = forwardRef(({
        if (charState.baseType === 3) { // Ghost
           yOffset = animationFrame === 1 ? 1 : -1;
           walkOffset = 0;
+          armOffset = 0;
        }
     }
 
+    // --- STEVE BALANCE ADJUSTMENT ---
+    const HEAD_Y_BASE = 4;
+    const HEAD_HEIGHT = 8;
+    const BODY_HEIGHT = 12;
+
+    const chestY = HEAD_Y_BASE + HEAD_HEIGHT + yOffset;
+    const handY = chestY;
+    const waistY = chestY + BODY_HEIGHT;
+    const legY = waistY;
+    
     const anchors = getAnchors({
         drawMode,
-        // Head offset: 3px (created 1px gap with chest at 14)
-        headY: (charState.baseType === 1 ? 18 : 3) + yOffset,
-        chestY: 14 + yOffset,
-        waistY: 19 + yOffset,
-        legY: 24 + yOffset,
-        handY: 19 + yOffset,
+        headY: HEAD_Y_BASE + yOffset,
+        chestY: chestY,
+        waistY: waistY,
+        legY: legY,
+        handY: handY,
         walkOffset
     });
 
-    // --- RENDER SEQUENCE ---
-
     drawGroundShadow(renderer, charState);
 
-    // Layer 1/3: Back parts
+    // Layer 1: Back parts
     drawWings(renderer, charState, drawMode, yOffset, true);
     drawTail(renderer, charState, drawMode, yOffset, true);
+    
+    // ★ Draw Back Hair (New)
+    drawBackHair(renderer, charState, drawMode, anchors);
 
-    // Back Hand/Weapon (if side view)
+    // Back Hand/Weapon
     if (charState.baseType !== 1) {
         if (drawMode === 1) {
              if (isRightFacing) {
-                 if (charState.shield > 0) drawShield(renderer, charState.shield, 14 + walkOffset, anchors.handAnchor.Front.y + itemBob, charState.shieldColor);
+                 if (charState.shield > 0) drawShield(renderer, charState.shield, 13 + armOffset, anchors.handAnchor.Front.y + 8 + itemBob, charState.shieldColor);
              } else {
-                 if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 13, anchors.handAnchor.Front.y + itemBob, charState.weaponColor, true);
+                 if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 13 + armOffset, anchors.handAnchor.Front.y + 8 + itemBob, charState.weaponColor, true);
              }
         } else if (drawMode === 3) {
-             if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 23, 19 + yOffset + itemBob, charState.weaponColor, true);
-             if (charState.shield > 0) drawShield(renderer, charState.shield, 9, 19 + yOffset + itemBob, charState.shieldColor);
+             if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 22, 16 + yOffset + itemBob, charState.weaponColor, true);
+             if (charState.shield > 0) drawShield(renderer, charState.shield, 9, 16 + yOffset + itemBob, charState.shieldColor);
         }
     }
 
@@ -115,7 +125,6 @@ const SpriteRenderer = forwardRef(({
     if (charState.baseType === 1) {
         drawSlimeBody(renderer, charState, drawMode, animationFrame);
     } else {
-        // 修正: walkOffset を渡す
         drawBody(renderer, charState, drawMode, animationFrame, anchors, walkOffset);
         drawHead(renderer, charState, drawMode, anchors);
     }
@@ -133,18 +142,18 @@ const SpriteRenderer = forwardRef(({
     drawHeadAccessory(renderer, charState.accessory, anchors.headAnchor.topLeft.y, charState.hairColor, drawMode, charState.baseType);
     drawHelmet(renderer, charState.helmet, anchors.headAnchor.topLeft.y, charState.helmetColor, drawMode);
 
-    drawHands(renderer, charState, drawMode, anchors.handAnchor?.Front?.y || 19, walkOffset, true);
+    drawHands(renderer, charState, drawMode, anchors.handAnchor?.Front?.y || handY, armOffset, true);
 
     // Front Weapon/Shield
     if (charState.baseType !== 1) {
         if (drawMode === 0) {
-            if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 9, 19 + yOffset + itemBob, charState.weaponColor, false);
-            if (charState.shield > 0) drawShield(renderer, charState.shield, 23, 19 + yOffset + itemBob, charState.shieldColor);
+            if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 9, 16 + yOffset + itemBob, charState.weaponColor, false);
+            if (charState.shield > 0) drawShield(renderer, charState.shield, 22, 16 + yOffset + itemBob, charState.shieldColor);
         } else if (drawMode === 1) {
             if (isRightFacing) {
-                if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 12 + walkOffset, 19 + yOffset + itemBob, charState.weaponColor, true);
+                if (charState.weapon > 0) drawWeapon(renderer, charState.weapon, 13 + armOffset, 16 + yOffset + itemBob, charState.weaponColor, true);
             } else {
-                if (charState.shield > 0) drawShield(renderer, charState.shield, 12 + walkOffset, 19 + yOffset + itemBob, charState.shieldColor);
+                if (charState.shield > 0) drawShield(renderer, charState.shield, 13 + armOffset, 16 + yOffset + itemBob, charState.shieldColor);
             }
         }
     }
