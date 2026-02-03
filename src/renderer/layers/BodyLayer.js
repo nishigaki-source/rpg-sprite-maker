@@ -148,6 +148,30 @@ export const drawBody = (renderer, charState, drawMode, animationFrame, anchors,
 export const drawHands = (renderer, charState, drawMode, handY, walkOffset, isFrontLayer) => {
     renderer.setLayer(isFrontLayer ? 3 : 1);
     const { hasClaws, hornColor, skinColor, baseType, chestColor, chestStyle } = charState;
+
+    // Weapon equip detection (supports multiple possible state shapes)
+    // NOTE: Be strict so "shield none" or default style values don't trigger weapon pose.
+    const weaponObj = charState?.weapon ?? charState?.equippedWeapon ?? charState?.equipment?.weapon;
+    const weaponId = charState?.weaponId ?? weaponObj?.id ?? weaponObj?.weaponId;
+
+    const hasWeapon = Boolean(
+        // object form
+        (weaponObj && weaponObj !== 'none' && weaponObj !== 'NONE') ||
+        // id form
+        (weaponId !== undefined && weaponId !== null && weaponId !== 0 && weaponId !== '0' && weaponId !== 'none' && weaponId !== 'NONE')
+    );
+
+    // Shield equip detection (strict)
+    const shieldObj = charState?.shield ?? charState?.equippedShield ?? charState?.equipment?.shield;
+    const shieldId = charState?.shieldId ?? shieldObj?.id ?? shieldObj?.shieldId;
+
+    const hasShield = Boolean(
+        // object form
+        (shieldObj && shieldObj !== 'none' && shieldObj !== 'NONE') ||
+        // id form
+        (shieldId !== undefined && shieldId !== null && shieldId !== 0 && shieldId !== '0' && shieldId !== 'none' && shieldId !== 'NONE')
+    );
+
     if (baseType === 1) return; 
 
     const hColor = hasClaws ? hornColor : (skinColor === '#fsc' ? '#ffdbac' : skinColor);
@@ -156,23 +180,56 @@ export const drawHands = (renderer, charState, drawMode, handY, walkOffset, isFr
 
     if (drawMode === 0 || drawMode === 3) { 
         if (!isFrontLayer) return; 
-        
-        renderer.drawRect(8, handY, armW, armH, hColor); 
-        renderer.drawRect(21, handY, armW, armH, hColor);
-        
+
+        // Arms: keep shoulder position.
+        // Weapon is held on the left side (x=8). Shield is held on the right side (x=21).
+        const leftArmH  = hasWeapon ? (armH - 5) : armH;
+        const rightArmH = hasShield ? (armH - 5) : armH;
+        renderer.drawRect(8,  handY, armW, leftArmH,  hColor);
+        renderer.drawRect(21, handY, armW, rightArmH, hColor);
+
         if (chestStyle !== 0 && chestStyle !== 5) {
+            // Sleeves stay at shoulder level (do not move)
             renderer.drawRect(8, handY, armW, 4, chestColor);
             renderer.drawRect(21, handY, armW, 4, chestColor);
         }
 
-        renderer.drawPixel(10, handY + 12, 'transparent');
-        renderer.drawPixel(21, handY + 12, 'transparent');
-
+        // Cleanup pixels near the wrist area
+        const leftCleanY  = handY + (leftArmH - 2);
+        const rightCleanY = handY + (rightArmH - 2);
+        renderer.drawPixel(10, leftCleanY, 'transparent');
+        renderer.drawPixel(21, rightCleanY, 'transparent');
     } else if (drawMode === 1) { 
         if (isFrontLayer) {
-            renderer.drawRect(13 + walkOffset, handY, armW, armH, hColor);
-            if (chestStyle !== 0 && chestStyle !== 5) {
-                renderer.drawRect(13 + walkOffset, handY, armW, 4, chestColor);
+            const baseX = 13 + walkOffset;
+
+            if (hasWeapon) {
+                // Center the shoulder on the torso in side view
+                // (Torso width in side view is 6px; shifting +1 places the 3px arm near the center)
+                const shoulderX = baseX + 1;
+                const shoulderY = handY;
+
+                // Upper arm (slightly longer so it connects)
+                const upperH = 7;
+                renderer.drawRect(shoulderX, shoulderY, armW, upperH, hColor);
+
+                // Sleeve on upper arm (follows shoulder)
+                if (chestStyle !== 0 && chestStyle !== 5) {
+                    renderer.drawRect(shoulderX, shoulderY, armW, 3, chestColor);
+                }
+
+                // Forearm reaching forward (reversed direction: toward -X)
+                // Overlap 1px with upper arm to avoid separation
+                renderer.drawRect(shoulderX - 4, shoulderY + 5, 5, 3, hColor);
+
+                // Hand/palm (at the forward end)
+                renderer.drawRect(shoulderX - 5, shoulderY + 4, 2, 2, hColor);
+            } else {
+                // Default side arm
+                renderer.drawRect(baseX, handY, armW, armH, hColor);
+                if (chestStyle !== 0 && chestStyle !== 5) {
+                    renderer.drawRect(baseX, handY, armW, 4, chestColor);
+                }
             }
         }
     }
